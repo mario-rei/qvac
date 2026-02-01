@@ -1,0 +1,5 @@
+/.sync-repos
+sync-monorepo.sh
+reset_history.sh
+/node_modules
+packages/**/.npmrc
