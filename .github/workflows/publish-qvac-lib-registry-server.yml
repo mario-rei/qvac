@@ -184,7 +184,6 @@ jobs:
         run: npm run typecheck
 
   publish-client:
-    needs: [detect-changes, publish-logic, publish-schema]
     needs: [detect-changes, publish-logic, publish-schema, lint-and-test]
     if: |
       needs.detect-changes.outputs.client_changed == 'true' &&

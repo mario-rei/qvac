@@ -93,8 +93,7 @@ jobs:
           set -eu
           echo "Writing .npmrc for dual registry install…"
           qvac_registry="https://registry.npmjs.org/"
-          cat > .npmrc <<NPMRC
-          always-auth=true
+          cat > ~/.npmrc <<NPMRC
           registry=https://registry.npmjs.org/
           @qvac:registry=${qvac_registry}
           @tetherto:registry=https://npm.pkg.github.com/
