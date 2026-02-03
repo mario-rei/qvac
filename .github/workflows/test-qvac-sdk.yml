@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   desktop-tests:
-    uses: tetherto/qvac-devops/.github/workflows/test-desktop.yml@monorepo_update
+    uses: ./.github/workflows/test-desktop-qvac-sdk.yml
     with:
       working-directory: "packages/qvac-sdk/tests-qvac"
       platforms: '["ai-run-linux-gpu", "macos-latest-xlarge", "ai-run-windows-gpu"]'
