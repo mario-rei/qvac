@@ -2,19 +2,17 @@ name: On PR Trigger (Qvac-lib-infer-llamacpp-llm)
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
     branches:
       - main
       - release-*
     paths:
       - "packages/qvac-lib-infer-llamacpp-llm/**"
-
-  pull_request_target:
-    types: [labeled]
-    branches:
-      - main
-    paths:
-      - "packages/qvac-lib-infer-llamacpp-llm/**"
+  workflow_dispatch:
 
   workflow_dispatch:
   workflow_call:
