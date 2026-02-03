@@ -22,6 +22,7 @@ jobs:
     if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-')
     permissions:
       pull-requests: write
+      contents: read
     uses: tetherto/qvac-devops/.github/workflows/release-pr-guard.yml@monorepo_update
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}

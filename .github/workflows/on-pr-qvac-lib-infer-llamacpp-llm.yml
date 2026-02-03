@@ -13,8 +13,7 @@ on:
     paths:
       - "packages/qvac-lib-infer-llamacpp-llm/**"
   workflow_dispatch:
-
-  workflow_dispatch:
+  
   workflow_call:
 
 permissions:
