@@ -120,19 +120,6 @@ jobs:
           repository: ${{ inputs.repository || github.repository }}
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: Validate workdir exists
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "WORKDIR=${WORKDIR}"
-          echo "PKG_DIR=${PKG_DIR}"
-          test -d "${PKG_DIR}" || {
-            echo "❌ workdir not found: ${PKG_DIR}"
-            echo "Repo root listing:"
-            ls -la
-            exit 1
-          }
-
       - name: Configure scoped registry for @tetherto and @qvac packages (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}
         working-directory: ${{ env.PKG_DIR }}
