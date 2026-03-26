@@ -178,7 +178,9 @@ jobs:
         needs.authorize.outputs.allowed == 'true'
       )
     uses: ./.github/workflows/prebuilds-qvac-lib-infer-onnx.yml
-    secrets: inherit
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}

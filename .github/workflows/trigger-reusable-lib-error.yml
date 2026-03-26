@@ -146,7 +146,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
-    secrets: inherit
     with:
       repo_name: "error-base"
       release_name: "QVAC error-base Lib"

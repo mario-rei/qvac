@@ -13,6 +13,12 @@ on:
           - dev
 
   workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+      PAT_TOKEN:
+        required: true
+
     inputs:
       ref:
         description: "ref"
@@ -576,7 +582,6 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release-qvac-lib-infer-onnx.yml
-    secrets: inherit
     with:
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
