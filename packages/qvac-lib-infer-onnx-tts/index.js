@@ -2,6 +2,7 @@
 
 const { platform } = require('bare-os')
 const path = require('bare-path')
+const fs = require('bare-fs')
 const QvacLogger = require('@qvac/logging')
 const {
   createJobHandler,
@@ -11,6 +12,28 @@ const {
 const { TTSInterface } = require('./tts')
 const { QvacErrorAddonTTS, ERR_CODES } = require('./lib/error')
 const { splitTtsText } = require('./lib/textChunker')
+
+/**
+ * CoreML EP in ORT ≤1.24 cannot load models with external data (.onnx_data):
+ * the Initializer constructor receives an empty model_path for in-memory
+ * converted tensors, causing "!model_path.empty() was false".
+ *
+ * When useGPU is true on macOS, swap each external-data .onnx path for a
+ * single-file variant (<basename>_coreml.onnx) if one exists on disk.
+ * Models without external data or without a _coreml variant are left as-is
+ * (the C++ layer's try/catch will fall back to CPU for those).
+ */
+function resolveCoremlModelPath (onnxPath) {
+  if (!onnxPath) return onnxPath
+  const dataFile = onnxPath + '_data'
+  try { fs.statSync(dataFile) } catch (_) { return onnxPath }
+
+  const dir = path.dirname(onnxPath)
+  const base = path.basename(onnxPath, '.onnx')
+  const candidate = path.join(dir, base + '_coreml.onnx')
+  try { fs.statSync(candidate) } catch (_) { return onnxPath }
+  return candidate
+}
 
 // Engine types
 const ENGINE_CHATTERBOX = 'chatterbox'
@@ -412,18 +435,22 @@ class ONNXTTS {
     this.logger.info('[TTS] Engine type:', this._engineType)
     this.logger.info('[TTS] Language:', this._config?.language || 'en')
 
+    const useGPU = this._config?.useGPU || false
+    const resolvePath = (p) =>
+      (useGPU && platform() === 'darwin') ? resolveCoremlModelPath(p) : p
+
     let ttsParams
     if (this._engineType === ENGINE_SUPERTONIC) {
       ttsParams = this._getSupertonicTtsParams()
     } else {
       ttsParams = {
         tokenizerPath: this._tokenizerPath || '',
-        speechEncoderPath: this._speechEncoderPath || '',
-        embedTokensPath: this._embedTokensPath || '',
-        conditionalDecoderPath: this._conditionalDecoderPath || '',
-        languageModelPath: this._languageModelPath || '',
+        speechEncoderPath: resolvePath(this._speechEncoderPath) || '',
+        embedTokensPath: resolvePath(this._embedTokensPath) || '',
+        conditionalDecoderPath: resolvePath(this._conditionalDecoderPath) || '',
+        languageModelPath: resolvePath(this._languageModelPath) || '',
         language: this._config?.language || 'en',
-        useGPU: this._config?.useGPU || false,
+        useGPU,
         lazySessionLoading: this._lazySessionLoading
       }
       if (this._referenceAudio != null) {
@@ -621,18 +648,22 @@ class ONNXTTS {
       this._config.useGPU = newConfig.useGPU
     }
 
+    const useGPU = this._config?.useGPU || false
+    const resolvePath = (p) =>
+      (useGPU && platform() === 'darwin') ? resolveCoremlModelPath(p) : p
+
     let ttsParams
     if (this._engineType === ENGINE_SUPERTONIC) {
       ttsParams = this._getSupertonicTtsParams()
     } else {
       ttsParams = {
         tokenizerPath: this._tokenizerPath || '',
-        speechEncoderPath: this._speechEncoderPath || '',
-        embedTokensPath: this._embedTokensPath || '',
-        conditionalDecoderPath: this._conditionalDecoderPath || '',
-        languageModelPath: this._languageModelPath || '',
+        speechEncoderPath: resolvePath(this._speechEncoderPath) || '',
+        embedTokensPath: resolvePath(this._embedTokensPath) || '',
+        conditionalDecoderPath: resolvePath(this._conditionalDecoderPath) || '',
+        languageModelPath: resolvePath(this._languageModelPath) || '',
         language: this._config?.language || 'en',
-        useGPU: this._config?.useGPU || false,
+        useGPU,
         lazySessionLoading: this._lazySessionLoading
       }
       if (this._referenceAudio != null) {
@@ -660,3 +691,4 @@ class ONNXTTS {
 }
 
 module.exports = ONNXTTS
+module.exports.resolveCoremlModelPath = resolveCoremlModelPath

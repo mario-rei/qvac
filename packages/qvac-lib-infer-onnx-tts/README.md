@@ -201,6 +201,17 @@ TTS_LANGUAGE=all npm run models:ensure
 
 Models are saved to `models/chatterbox/` (English), `models/chatterbox-multilingual/`, `models/supertonic/`, and `models/supertonic-multilingual/`.
 
+### Preparing Models for CoreML (macOS GPU)
+
+ONNX Runtime's CoreML EP (≤1.24) cannot load models that use external data files (`.onnx_data`). To enable GPU acceleration on macOS with `useGPU: true`, you need single-file `*_coreml.onnx` variants. A conversion script is provided:
+
+```bash
+pip install onnx
+python3 scripts/prepare-coreml-models.py models/chatterbox
+```
+
+This scans the directory for `.onnx` files with `.onnx_data` sidecars and produces `<basename>_coreml.onnx` single-file variants. The runtime automatically picks up these variants when `useGPU: true` on macOS. Models without a `_coreml` variant fall back to CPU.
+
 ## Usage: Chatterbox
 
 ### 1. Import the Model Class
