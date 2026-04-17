@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/prepare-coreml-models.py` — Python script to convert external-data ONNX models into single-file `*_coreml.onnx` variants required for CoreML EP. Usage: `python3 scripts/prepare-coreml-models.py <model_dir>`.
 - Unit tests in `test/unit/coreml-path-resolution.test.js` covering `resolveCoremlModelPath` edge cases and integration with `_load()`/`reload()`.
 
+## [0.8.3]
+
+### Added
+- **LavaSR audio enhancement**: Opt-in neural speech enhancement post-processing with three independent controls:
+  - `enhance` — Vocos-based neural bandwidth extension to 48 kHz (2 ONNX sessions, ~55 MB)
+  - `denoise` — UL-UNAS denoiser at 16 kHz (1 ONNX session, ~1.7 MB)
+  - `outputSampleRate` — arbitrary target sample rate with smart algorithm selection (neural upscaling + conventional resampling)
+- `sampleRate` field in JS output callback (`data.sampleRate`) and in `runtimeStats` (JobEnded event)
+- Per-job `enhance`/`denoise`/`outputSampleRate` toggle via `run()` input, with lazy ONNX session loading on first use
+- DSP utilities: Lanczos resampler, radix-2 FFT, windowed STFT/ISTFT, Slaney mel filterbank, spectral crossover merge
+- C++ unit tests for all DSP utilities and LavaSR integration
+- Benchmark tests: enhancer ~22x realtime, denoiser ~48x realtime on Apple Silicon CPU
+- `ensureLavaSRModels()` download helper for test infrastructure
+- `example-enhanced-audio.js` comparison example (raw vs enhanced vs denoised+enhanced)
+
 ## [0.8.2]
 
 This release adds support for streaming and more languages for Chatterbox model.

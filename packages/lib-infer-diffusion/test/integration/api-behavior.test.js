@@ -1,6 +1,7 @@
 'use strict'
 
 const test = require('brittle')
+const path = require('bare-path')
 const os = require('bare-os')
 const proc = require('bare-process')
 const binding = require('../../binding')
@@ -14,8 +15,13 @@ const {
 const isDarwinX64 = os.platform() === 'darwin' && os.arch() === 'x64'
 const isLinuxArm64 = os.platform() === 'linux' && os.arch() === 'arm64'
 const isAndroid = os.platform() === 'android'
+const isWindows = os.platform() === 'win32'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
 const useCpu = isDarwinX64 || isLinuxArm64 || noGpu
+
+// Windows Vulkan backend is slower, increase timeout
+const BASE_TIMEOUT = 600000
+const testTimeout = isWindows ? BASE_TIMEOUT * 2 : BASE_TIMEOUT
 
 // Smallest model for fast behavior tests
 const MODEL = {
@@ -50,26 +56,24 @@ async function setupModel (t) {
     downloadUrl: MODEL.url
   })
 
-  const model = new ImgStableDiffusion(
-    {
-      logger: console,
-      diskPath: modelDir,
-      modelName
+  const model = new ImgStableDiffusion({
+    files: {
+      model: path.join(modelDir, modelName)
     },
-    {
+    config: {
       device: useCpu ? 'cpu' : 'gpu',
       vae_on_cpu: isAndroid,
       threads: 4,
       prediction: 'v',
       verbosity: '2'
-    }
-  )
+    },
+    logger: console
+  })
 
   await model.load()
 
   t.teardown(async () => {
     await model.unload().catch(() => {})
-    try { binding.releaseLogger() } catch (_) {}
   })
 
   return { model, modelDir }
@@ -82,7 +86,7 @@ function saveGeneratedImages (modelDir, filenameSuffix, images) {
   }
 }
 
-test('idle | run: allowed, returns QvacResponse', { timeout: 600000 }, async t => {
+test('idle | run: allowed, returns QvacResponse', { timeout: testTimeout }, async t => {
   const { model, modelDir } = await setupModel(t)
   const response = await model.run(SHORT_PARAMS)
   t.ok(response, 'run() returns a response')
@@ -98,13 +102,13 @@ test('idle | run: allowed, returns QvacResponse', { timeout: 600000 }, async t =
   saveGeneratedImages(modelDir, 'idle-run', images)
 })
 
-test('idle | cancel: allowed, no-op', { timeout: 600000 }, async t => {
+test('idle | cancel: allowed, no-op', { timeout: testTimeout }, async t => {
   const { model } = await setupModel(t)
   await model.cancel()
   t.pass('cancel when idle does not throw')
 })
 
-test('run | cancel: cancels current job', { timeout: 600000 }, async t => {
+test('run | cancel: cancels current job', { timeout: testTimeout }, async t => {
   const { model } = await setupModel(t)
   const response = await model.run(LONG_PARAMS)
 
@@ -127,7 +131,7 @@ test('run | cancel: cancels current job', { timeout: 600000 }, async t => {
   t.pass('cancel during run resolves and stops job')
 })
 
-test('run | run: second run() throws busy error', { timeout: 600000 }, async t => {
+test('run | run: second run() throws busy error', { timeout: testTimeout }, async t => {
   const { model, modelDir } = await setupModel(t)
   const firstResponse = await model.run(SHORT_PARAMS)
   let firstError = null
@@ -165,7 +169,7 @@ test('run | run: second run() throws busy error', { timeout: 600000 }, async t =
   saveGeneratedImages(modelDir, 'run-run-first-response', images)
 })
 
-test('cancel | run: can run again after cancel', { timeout: 600000 }, async t => {
+test('cancel | run: can run again after cancel', { timeout: testTimeout }, async t => {
   const { model, modelDir } = await setupModel(t)
 
   // Start a job and cancel after first progress tick
@@ -192,6 +196,30 @@ test('cancel | run: can run again after cancel', { timeout: 600000 }, async t =>
 
   t.ok(images.length > 0, 'can run again after cancel')
   saveGeneratedImages(modelDir, 'cancel-run-second-response', images)
+})
+
+test('run() before load() throws clear initialization error', { timeout: 60000 }, async t => {
+  const [, modelDir] = await ensureModel({
+    modelName: MODEL.name,
+    downloadUrl: MODEL.url
+  })
+
+  const model = new ImgStableDiffusion({
+    files: { model: path.join(modelDir, MODEL.name) },
+    config: { device: useCpu ? 'cpu' : 'gpu', threads: 4 },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  let caught = null
+  try {
+    await model.run(SHORT_PARAMS)
+  } catch (err) {
+    caught = err
+  }
+
+  t.ok(caught, 'run() before load() throws')
+  t.ok(/load\(\) first/i.test(caught?.message || ''), 'error message instructs to call load() first')
 })
 
 // Keep event loop alive briefly to let pending async operations complete.
