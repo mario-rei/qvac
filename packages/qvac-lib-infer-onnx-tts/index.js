@@ -26,12 +26,18 @@ const { splitTtsText } = require('./lib/textChunker')
 function resolveCoremlModelPath (onnxPath) {
   if (!onnxPath) return onnxPath
   const dataFile = onnxPath + '_data'
-  try { fs.statSync(dataFile) } catch (_) { return onnxPath }
+  try { fs.statSync(dataFile) } catch (err) {
+    if (err.code === 'ENOENT') return onnxPath
+    throw err
+  }
 
   const dir = path.dirname(onnxPath)
   const base = path.basename(onnxPath, '.onnx')
   const candidate = path.join(dir, base + '_coreml.onnx')
-  try { fs.statSync(candidate) } catch (_) { return onnxPath }
+  try { fs.statSync(candidate) } catch (err) {
+    if (err.code === 'ENOENT') return onnxPath
+    throw err
+  }
   return candidate
 }
 
