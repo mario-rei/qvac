@@ -171,6 +171,17 @@ The interactive script lets you choose which model variant to download (TDT, CTC
 
 Models will be saved to the `models/` directory.
 
+### Preparing Models for CoreML (macOS GPU)
+
+ONNX Runtime's CoreML EP (≤1.24) cannot load models that use external data files (`.onnx_data` / `.onnx.data`). To enable GPU acceleration on macOS with `useGPU: true`, you need single-file `*_coreml.onnx` variants. A conversion script is provided:
+
+```bash
+pip install onnx
+python3 scripts/prepare-coreml-models.py models/parakeet-tdt-0.6b-v3-onnx
+```
+
+This scans the directory for `.onnx` files with external data sidecars and produces `<basename>_coreml.onnx` single-file variants. The runtime automatically picks up these variants when `useGPU: true` on macOS. Models without a `_coreml` variant fall back to CPU.
+
 ### Supported Languages (TDT Model)
 
 The TDT model supports approximately 25 languages with automatic detection:

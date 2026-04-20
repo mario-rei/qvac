@@ -1,11 +1,48 @@
 'use strict'
 
 const fs = require('bare-fs')
+const path = require('bare-path')
+const { platform } = require('bare-os')
 const QvacLogger = require('@qvac/logging')
 const { createJobHandler } = require('@qvac/infer-base')
 
 const { ParakeetInterface } = require('./parakeet')
 const { END_OF_INPUT, ERR_CODES, QvacErrorAddonParakeet } = require('./lib/error')
+
+/**
+ * CoreML EP in ORT ≤1.24 cannot load models with external data:
+ * the Initializer constructor receives an empty model_path for in-memory
+ * converted tensors, causing "!model_path.empty() was false".
+ *
+ * When useGPU is true on macOS, swap each external-data .onnx path for a
+ * single-file variant (<basename>_coreml.onnx) if one exists on disk.
+ * Handles both naming conventions: .onnx_data and .onnx.data.
+ * Models without external data or without a _coreml variant are left as-is
+ * (the C++ layer's try/catch will fall back to CPU for those).
+ */
+function resolveCoremlModelPath (onnxPath) {
+  if (!onnxPath) return onnxPath
+
+  const hasExternalData = (p) => {
+    for (const suffix of ['_data', '.data']) {
+      try { fs.statSync(p + suffix); return true } catch (err) {
+        if (err.code !== 'ENOENT') throw err
+      }
+    }
+    return false
+  }
+
+  if (!hasExternalData(onnxPath)) return onnxPath
+
+  const dir = path.dirname(onnxPath)
+  const base = path.basename(onnxPath, '.onnx')
+  const candidate = path.join(dir, base + '_coreml.onnx')
+  try { fs.statSync(candidate) } catch (err) {
+    if (err.code === 'ENOENT') return onnxPath
+    throw err
+  }
+  return candidate
+}
 
 /**
  * Required model files for TDT model
@@ -175,12 +212,15 @@ class TranscriptionParakeet {
    */
   _buildConfigurationParams () {
     const modelType = this.params.modelType || 'tdt'
+    const useGPU = this.params.useGPU || false
+    const resolve = (p) =>
+      (useGPU && platform() === 'darwin') ? resolveCoremlModelPath(p) : p
 
     const configurationParams = {
       modelPath: '',
       modelType,
       maxThreads: this.params.maxThreads || 4,
-      useGPU: this.params.useGPU || false,
+      useGPU,
       sampleRate: this.params.sampleRate || 16000,
       channels: this.params.channels || 1,
       captionEnabled: this.params.captionEnabled || false,
@@ -188,17 +228,17 @@ class TranscriptionParakeet {
       seed: this.params.seed ?? -1
     }
 
-    if (this._config.encoderPath) configurationParams.encoderPath = this._config.encoderPath
+    if (this._config.encoderPath) configurationParams.encoderPath = resolve(this._config.encoderPath)
     if (this._config.encoderDataPath) configurationParams.encoderDataPath = this._config.encoderDataPath
-    if (this._config.decoderPath) configurationParams.decoderPath = this._config.decoderPath
+    if (this._config.decoderPath) configurationParams.decoderPath = resolve(this._config.decoderPath)
     if (this._config.vocabPath) configurationParams.vocabPath = this._config.vocabPath
-    if (this._config.preprocessorPath) configurationParams.preprocessorPath = this._config.preprocessorPath
-    if (this._config.ctcModelPath) configurationParams.ctcModelPath = this._config.ctcModelPath
+    if (this._config.preprocessorPath) configurationParams.preprocessorPath = resolve(this._config.preprocessorPath)
+    if (this._config.ctcModelPath) configurationParams.ctcModelPath = resolve(this._config.ctcModelPath)
     if (this._config.ctcModelDataPath) configurationParams.ctcModelDataPath = this._config.ctcModelDataPath
     if (this._config.tokenizerPath) configurationParams.tokenizerPath = this._config.tokenizerPath
-    if (this._config.eouEncoderPath) configurationParams.eouEncoderPath = this._config.eouEncoderPath
-    if (this._config.eouDecoderPath) configurationParams.eouDecoderPath = this._config.eouDecoderPath
-    if (this._config.sortformerPath) configurationParams.sortformerPath = this._config.sortformerPath
+    if (this._config.eouEncoderPath) configurationParams.eouEncoderPath = resolve(this._config.eouEncoderPath)
+    if (this._config.eouDecoderPath) configurationParams.eouDecoderPath = resolve(this._config.eouDecoderPath)
+    if (this._config.sortformerPath) configurationParams.sortformerPath = resolve(this._config.sortformerPath)
 
     return configurationParams
   }
@@ -425,3 +465,4 @@ class TranscriptionParakeet {
 }
 
 module.exports = TranscriptionParakeet
+module.exports.resolveCoremlModelPath = resolveCoremlModelPath

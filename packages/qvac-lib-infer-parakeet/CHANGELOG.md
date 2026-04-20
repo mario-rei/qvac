@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **CoreML GPU silent fallback on macOS**: When `useGPU: true` is set, CoreML EP in ORT ≤1.24 crashes on models with external data (`.onnx_data` / `.onnx.data`) due to a bug in `ModelBuilder::AddConstant()` that passes an empty `model_path` to the `Initializer` constructor, producing `!model_path.empty() was false`. The fix automatically resolves external-data model paths to single-file `*_coreml.onnx` variants in `_buildConfigurationParams()`, bypassing the ORT bug. Models without external data or without a `_coreml` variant are left unchanged and fall back to CPU gracefully via the existing C++ try/catch.
+
+### Added
+- `resolveCoremlModelPath()` helper function (exported for testing) that detects external-data models (both `.onnx_data` and `.onnx.data` naming) and swaps to `<basename>_coreml.onnx` if available on disk.
+- `scripts/prepare-coreml-models.py` — Python script to convert external-data ONNX models into single-file `*_coreml.onnx` variants required for CoreML EP. Usage: `python3 scripts/prepare-coreml-models.py <model_dir>`.
+- Unit tests in `test/unit/coreml-path-resolution.test.js` covering `resolveCoremlModelPath` edge cases and integration with `_buildConfigurationParams()`.
+
 ## [0.3.2]
 
 ### Fixed
