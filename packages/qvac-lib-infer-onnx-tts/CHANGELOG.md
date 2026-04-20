@@ -15,6 +15,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/prepare-coreml-models.py` — Python script to convert external-data ONNX models into single-file `*_coreml.onnx` variants required for CoreML EP. Usage: `python3 scripts/prepare-coreml-models.py <model_dir>`.
 - Unit tests in `test/unit/coreml-path-resolution.test.js` covering `resolveCoremlModelPath` edge cases and integration with `_load()`/`reload()`.
 
+## [0.8.4]
+
+This release adds streaming options for both directions: you can stream **PCM out** from a full string (`run` with `streamOutput`, or `runStream`), and you can feed **incremental text** from an async source (`runStreaming`) with optional sentence accumulation before each native job. Examples and tests cover Supertonic and Chatterbox so you can copy a pattern that matches your integration.
+
+## New APIs
+
+### Chunked output on `run` and `runStream`
+
+`run({ input, streamOutput: true })` splits the input into sentence-sized chunks and invokes `onUpdate` for each PCM chunk, similar to the existing `runStream(text)` path. `runStream(text, options)` remains a thin wrapper over that behavior for callers that already have the full script as a string.
+
+### Streaming text in with `runStreaming`
+
+`runStreaming(textStream, options)` accepts async string input (including token-by-token yields), optionally coalescing fragments with `accumulateTextStream` from `lib/textStreamAccumulator.js` so small chunks are merged until a sentence boundary, a grapheme limit, or an idle flush. You can turn accumulation off when you want one native job per yield.
+
+## Features
+
+### Examples and tests
+
+New and updated examples demonstrate Chatterbox and Supertonic: output-only streaming, IO streaming with `runStreaming`, and header comments on batch examples pointing to the streaming APIs. Integration coverage exercises `run({ streamOutput: true })` and `runStreaming`, and unit tests cover `runStream` orchestration and streaming accumulation behavior with a stub engine.
+
 ## [0.8.3]
 
 ### Added
