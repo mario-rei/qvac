@@ -36,6 +36,22 @@ struct WhisperConfig {
   std::map<std::string, JSValueVariant> whisperMainCfg;
   std::map<std::string, JSValueVariant> vadCfg;
   std::map<std::string, JSValueVariant> whisperContextCfg;
+
+  // Addon-level configuration consumed at backend-init time, not by
+  // whisper_context_params / whisper_full_params. Both are optional and default
+  // to empty strings so existing callers see no behavior change.
+
+  // Writable directory used to cache OpenCL JIT-compiled kernels on Android.
+  // When non-empty, "/opencl-cache" is appended and the resulting path is
+  // exported as GGML_OPENCL_CACHE_DIR before the first ggml backend load.
+  // Ignored on non-Android platforms.
+  std::string openclCacheDir;
+
+  // Directory containing prebuilt ggml backend shared libraries
+  // (libggml-cpu*.so, libggml-vulkan.so, libggml-opencl.so, ...). When
+  // non-empty it is forwarded to ggml_backend_load_all_from_path; otherwise
+  // ggml_backend_load_all() default search is used.
+  std::string backendsDir;
 };
 
 struct MiscConfig {

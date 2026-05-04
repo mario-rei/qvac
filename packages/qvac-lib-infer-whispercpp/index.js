@@ -178,6 +178,16 @@ class TranscriptionWhispercpp {
       audio_format: this._config.audio_format || this.params.audio_format || 's16le'
     }
 
+    // Top-level addon options consumed by WhisperModel::initializeBackend()
+    // before the first whisper_init_*; only forward when set so omitting them
+    // keeps the existing default behavior.
+    if (typeof this._config.openclCacheDir === 'string' && this._config.openclCacheDir.length > 0) {
+      configurationParams.openclCacheDir = this._config.openclCacheDir
+    }
+    if (typeof this._config.backendsDir === 'string' && this._config.backendsDir.length > 0) {
+      configurationParams.backendsDir = this._config.backendsDir
+    }
+
     // this entrypoint serves as the model configuration.
     // must contain whisperConfig, vadParams, and contextParams
     _checkParamsExists(configurationParams)
@@ -406,6 +416,15 @@ class TranscriptionWhispercpp {
           caption_enabled: false
         },
         audio_format: newConfig.audio_format || this.params.audio_format || 's16le'
+      }
+
+      // Forward the same backend-init knobs across reloads so any underlying
+      // re-init keeps the same writable cache dir and backends search path.
+      if (typeof this._config.openclCacheDir === 'string' && this._config.openclCacheDir.length > 0) {
+        configurationParams.openclCacheDir = this._config.openclCacheDir
+      }
+      if (typeof this._config.backendsDir === 'string' && this._config.backendsDir.length > 0) {
+        configurationParams.backendsDir = this._config.backendsDir
       }
 
       _checkParamsExists(configurationParams)

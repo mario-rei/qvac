@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.8]
+
+### Added
+- OpenCL GPU acceleration on Android (Adreno-class devices), wired through the `whisper-cpp` vcpkg port's new `opencl` feature. Disabled by default; opt in by setting `use_gpu: true` on Android with the OpenCL ICD available.
+- New `openclCacheDir` and `backendsDir` options on `TranscriptionWhispercppConfig`. On Android `openclCacheDir` is forwarded to `GGML_OPENCL_CACHE_DIR` so OpenCL JIT kernels survive across runs.
+- `WhisperModel::initializeBackend()` now eagerly loads ggml DL backends (`libggml-{cpu,vulkan,opencl}.so`) and applies the OpenCL cache env var before the first `whisper_init_*` call.
+- Example `examples/example.android-opencl.js` demonstrating the new options.
+
+### Changed
+- Bumped vendored `whisper-cpp` (tetherto/qvac-ext-lib-whisper.cpp) to `v1.8.4.3`, syncing with upstream `ggml-org/whisper.cpp:master` (243 commits past `v1.8.4`) while preserving the BCI patches.
+- Bumped `@qvac/transcription-whispercpp` package version from `0.6.7` to `0.6.8`.
+
 ## [0.6.7]
 
 ### Changed

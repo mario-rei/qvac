@@ -39,9 +39,11 @@ public:
   ~WhisperModel() noexcept;
 
   // ModelApiTest required methods
-  void initializeBackend() {
-    // No-op - WhisperModel handles initialization in constructor/load
-  }
+  // Lazily loads ggml DL backends (cpu/vulkan/opencl/...) using configuration
+  // stored on cfg_ (`backendsDir` and `openclCacheDir`). Runs at most once per
+  // process (subsequent calls are no-ops) so it's safe to invoke from `load()`
+  // and reload paths.
+  void initializeBackend();
   // set config from WhisperConfig
   void setConfig(const WhisperConfig& config);
 

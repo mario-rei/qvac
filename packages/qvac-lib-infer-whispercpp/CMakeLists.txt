@@ -14,12 +14,22 @@ else()
   option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
 endif()
 
+if(_qvac_whispercpp_target_os STREQUAL "Android")
+  option(ENABLE_OPENCL "Enable OpenCL GPU acceleration (Adreno-class Android devices)" ON)
+else()
+  option(ENABLE_OPENCL "Enable OpenCL GPU acceleration (Adreno-class Android devices)" OFF)
+endif()
+
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
 if(ENABLE_VULKAN)
   list(APPEND VCPKG_MANIFEST_FEATURES "vulkan")
+endif()
+
+if(ENABLE_OPENCL)
+  list(APPEND VCPKG_MANIFEST_FEATURES "opencl")
 endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)

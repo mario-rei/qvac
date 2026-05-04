@@ -218,6 +218,33 @@ bare-make install
 
 CI prebuilds for Linux, Android, and Windows include Vulkan by default. macOS and iOS use Metal instead.
 
+#### OpenCL GPU Acceleration on Android (Adreno)
+
+Modern Qualcomm Adreno-class GPUs (Adreno 6xx/7xx/8xx) ship a usable OpenCL ICD and ggml's `opencl` backend frequently outperforms the Vulkan backend on those devices. The `whisper-cpp` vcpkg port exposes an `opencl` feature that links the OpenCL backend into the prebuilt `libggml-opencl.so`; CI Android prebuilds enable it by default.
+
+OpenCL is opt-in at runtime exactly like the other GPU backends:
+
+- Set `use_gpu: true` in `contextParams`. ggml will pick the OpenCL backend automatically when the device's OpenCL ICD is present and reports a compatible Adreno device.
+- Provide `openclCacheDir` on the top-level config so the JIT-compiled OpenCL kernels survive across app starts. The C++ runtime appends `/opencl-cache` to that path and exports it as `GGML_OPENCL_CACHE_DIR` before the first `whisper_init_*` call. Point this at a writable, app-private directory, e.g. `path.join(os.cachedir(), 'whisper')` or `/data/data/<your.package>/cache/whisper`.
+- (Optional) Provide `backendsDir` if the prebuilt `libggml-{cpu,vulkan,opencl}.so` files are not in the default loader search path; this is forwarded directly to `ggml_backend_load_all_from_path`.
+
+```javascript
+const config = {
+  contextParams: {
+    model: '/data/data/io.tether.test.qvac/files/ggml-base.bin',
+    use_gpu: true
+  },
+  whisperConfig: { language: 'en' },
+  openclCacheDir: '/data/data/io.tether.test.qvac/cache/whisper'
+}
+```
+
+The first run after install will JIT-compile the OpenCL kernels (a few seconds of extra latency); subsequent runs reuse the cached artifacts under `openclCacheDir/opencl-cache`.
+
+> **Known issue (QVAC-17790, parity with the LLM addon):** ggml's OpenCL backend asserts when an Adreno 830 device meets `q4_0` weights with a hidden dimension that is *not* divisible by 4 (`M%4 == 0`). Pick a model whose hidden dim is a multiple of 4 (most Whisper checkpoints already are; verify when using community quantizations) or fall back to Vulkan / CPU on those devices. The same caveat is documented in the nmtcpp / llamacpp READMEs.
+
+OpenCL is a no-op on non-Android platforms — the new options are ignored and the existing Metal/Vulkan/CPU code paths run unchanged.
+
 #### Running Tests
 
 After building, you can run the test suite:

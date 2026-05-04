@@ -24,6 +24,15 @@ function checkConfig (configObject) {
     }
   }
 
+  // Optional top-level addon-only string options. Validate type if present
+  // but never reject when absent.
+  if (configObject.openclCacheDir !== undefined && typeof configObject.openclCacheDir !== 'string') {
+    throw new Error('openclCacheDir must be a string when provided')
+  }
+  if (configObject.backendsDir !== undefined && typeof configObject.backendsDir !== 'string') {
+    throw new Error('backendsDir must be a string when provided')
+  }
+
   const listOfParamsWhisperConfig = [
     'strategy',
     'n_threads',

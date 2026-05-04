@@ -37,6 +37,17 @@ declare interface TranscriptionWhispercppConfig {
   enableStats?: boolean;
   vadModelPath?: string;
   whisperConfig: WhisperConfig;
+  /**
+   * On Android, writable directory used to cache OpenCL JIT-compiled kernels
+   * (forwarded to GGML_OPENCL_CACHE_DIR). No-op on other platforms.
+   */
+  openclCacheDir?: string;
+  /**
+   * On Android, directory containing prebuilt ggml backend .so files
+   * (libggml-opencl.so, libggml-vulkan.so, libggml-cpu*.so). Falls back
+   * to ggml_backend_load_all() default search when empty.
+   */
+  backendsDir?: string;
   [args: string]: unknown;
 }
 

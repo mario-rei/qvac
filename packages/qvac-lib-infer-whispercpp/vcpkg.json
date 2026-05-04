@@ -9,9 +9,23 @@
       "version>=": "1.4.4#2"
     },
     "whisper-cpp",
-    "gtest"
+    "gtest",
+    {
+      "name": "opencl",
+      "platform": "android"
+    }
   ],
   "features": {
+    "opencl": {
+      "description": "Enable OpenCL GPU acceleration (Android only)",
+      "dependencies": [
+        {
+          "name": "whisper-cpp",
+          "features": ["opencl"],
+          "platform": "android"
+        }
+      ]
+    },
     "vulkan": {
       "description": "Enable Vulkan GPU acceleration",
       "dependencies": [
@@ -25,7 +39,7 @@
   "overrides": [
     {
       "name": "whisper-cpp",
-      "version": "1.8.4.1"
+      "version": "1.8.4.3"
     }
   ]
 }

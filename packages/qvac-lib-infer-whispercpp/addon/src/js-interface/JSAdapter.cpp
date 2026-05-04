@@ -45,6 +45,20 @@ auto JSAdapter::loadFromJSObject(Object jsObject, js_env_t* env)
     loadContextParams(contextParamsObj.value(), env, config);
   }
 
+  // Top-level addon-only string options. These are not whisper.h params so
+  // they live directly on WhisperConfig rather than in any handlers map. They
+  // are consumed by WhisperModel::initializeBackend() at load() time.
+  auto openclCacheDir =
+      jsObject.getOptionalProperty<String>(env, "openclCacheDir");
+  if (openclCacheDir.has_value()) {
+    config.openclCacheDir = openclCacheDir.value().as<std::string>(env);
+  }
+
+  auto backendsDir = jsObject.getOptionalProperty<String>(env, "backendsDir");
+  if (backendsDir.has_value()) {
+    config.backendsDir = backendsDir.value().as<std::string>(env);
+  }
+
   return config;
 }
 

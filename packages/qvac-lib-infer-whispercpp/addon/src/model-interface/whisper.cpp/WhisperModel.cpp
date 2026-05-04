@@ -3,13 +3,18 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <mutex>
 #include <ranges>
 #include <thread>
 #include <utility>
+
+#include <ggml-backend.h>
 
 #include "WhisperConfig.hpp"
 #include "WhisperHandlers.hpp"
@@ -40,6 +45,53 @@ static bool shouldAbortWhisper(void* userData) {
 
 WhisperModel::WhisperModel(WhisperConfig config) : cfg_(std::move(config)) {}
 
+namespace {
+// Process-global guard ensuring backends are loaded at most once even when
+// multiple WhisperModel instances are created or load()/reload() is called
+// repeatedly. Mirrors LlamaLazyInitializeBackend's once-per-process pattern.
+std::once_flag g_backendInitFlag;
+} // namespace
+
+void WhisperModel::initializeBackend() {
+  std::call_once(g_backendInitFlag, [this]() {
+    try {
+#ifdef __ANDROID__
+      if (!cfg_.openclCacheDir.empty()) {
+        const auto oclCachePath =
+            (std::filesystem::path(cfg_.openclCacheDir) / "opencl-cache")
+                .string();
+        ::setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+            "GGML_OPENCL_CACHE_DIR set to: " + oclCachePath);
+      }
+#endif
+
+      if (!cfg_.backendsDir.empty()) {
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+            "Loading ggml backends from directory: " + cfg_.backendsDir);
+        ggml_backend_load_all_from_path(cfg_.backendsDir.c_str());
+      } else {
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
+            "Loading ggml backends using default search path");
+        ggml_backend_load_all();
+      }
+    } catch (const std::exception& e) {
+      // Do not throw from load(): backend loading errors are logged so we can
+      // still fall back to whatever backends were registered before this call.
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          std::string("ggml backend initialization raised: ") + e.what());
+    } catch (...) {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "ggml backend initialization raised an unknown exception");
+    }
+  });
+}
+
 WhisperModel::~WhisperModel() noexcept {
   try {
     unload();
@@ -65,6 +117,11 @@ auto WhisperModel::formatCaptionOutput(Transcript& transcript) -> void {
 
 void WhisperModel::load() {
   if (!ctx_) {
+
+    // Eagerly load ggml dynamic backends and (on Android) wire up the
+    // OpenCL kernel cache directory before whisper touches GGML. This is a
+    // no-op after the first invocation thanks to the std::once_flag guard.
+    initializeBackend();
 
     whisper_context_params contextParams = toWhisperContextParams(cfg_);
 
