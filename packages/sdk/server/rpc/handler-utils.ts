@@ -14,9 +14,27 @@ import {
 import { PluginHandlerTypeMismatchError } from "@/utils/errors-server";
 import { setSDKConfig } from "@/server/bare/registry/config-registry";
 import { setRuntimeContext } from "@/server/bare/registry/runtime-context-registry";
+import { getServerLogger } from "@/logging";
 import { type ServerProfiler } from "./profiling";
 import { isTerminalChunk } from "./rpc-utils";
 import { createProgressThrottle } from "./progress-throttle";
+import {
+  trackHandlerStart,
+  trackHandlerEnd,
+  awaitHandlerDrain,
+} from "./handler-drain";
+
+// Re-export the drain helpers so existing callers can keep importing from
+// handler-utils. The implementations live in handler-drain.ts which is a
+// pure module (no logger / no Bare runtime imports), making it safe to
+// unit-test under any JS runtime.
+export {
+  trackHandlerStart,
+  trackHandlerEnd,
+  awaitHandlerDrain,
+} from "./handler-drain";
+
+const logger = getServerLogger();
 
 function getProfilingMetaFromRequest(
   request: Request,
@@ -182,6 +200,7 @@ export async function executeDuplexHandler(
       ? entry.delegatedHandler
       : entry.handler;
 
+  trackHandlerStart();
   profiler.startHandler();
 
   try {
@@ -203,6 +222,8 @@ export async function executeDuplexHandler(
   } catch (error) {
     profiler.endHandler();
     sendStreamErrorResponse(outputStream, error, profiler);
+  } finally {
+    trackHandlerEnd();
   }
 }
 
@@ -233,30 +254,35 @@ export async function executeHandler(
     );
   }
 
-  if (entry.type === "stream") {
-    await executeStreamHandler(
-      req,
-      request,
-      handler as StreamHandler,
-      profiler,
-      isDelegated,
-    );
-  } else if (wantsProgress) {
-    await executeProgressHandler(
-      req,
-      request,
-      handler as ProgressHandler,
-      profiler,
-      isDelegated,
-    );
-  } else {
-    await executeReplyHandler(
-      req,
-      request,
-      handler as ReplyHandler,
-      profiler,
-      isDelegated,
-    );
+  trackHandlerStart();
+  try {
+    if (entry.type === "stream") {
+      await executeStreamHandler(
+        req,
+        request,
+        handler as StreamHandler,
+        profiler,
+        isDelegated,
+      );
+    } else if (wantsProgress) {
+      await executeProgressHandler(
+        req,
+        request,
+        handler as ProgressHandler,
+        profiler,
+        isDelegated,
+      );
+    } else {
+      await executeReplyHandler(
+        req,
+        request,
+        handler as ReplyHandler,
+        profiler,
+        isDelegated,
+      );
+    }
+  } finally {
+    trackHandlerEnd();
   }
 }
 
@@ -316,8 +342,29 @@ export function isShutdownMessage(data: unknown): data is ShutdownMessage {
   );
 }
 
+// Drain budget for in-flight handlers before pre-terminate cleanup runs.
+// Strictly below the 10s SHUTDOWN_RPC_TIMEOUT_MS in expo-rpc-client so the
+// client never sees a phantom timeout from this gate; remaining ~2s is
+// reserved for the actual cleanup body (unloadAllModels, registry teardown).
+const SHUTDOWN_HANDLER_DRAIN_MS = 8000;
+
 export async function handleShutdown(req: RPC.IncomingRequest): Promise<void> {
   try {
+    // Wait for any in-flight handler (e.g. a transcribe call mid-whisper_full
+    // on a JobRunner C++ thread) to complete before tearing down addons.
+    // unloadAllModels invokes WhisperModel::unload -> whisper_free(ctx); if
+    // that races with whisper_full(ctx, ...) the addon use-after-frees and
+    // the iOS host process is killed by the kernel (Mach exception 309).
+    //
+    // Best-effort: on timeout, warn and proceed so a wedged handler cannot
+    // indefinitely block client teardown.
+    const drained = await awaitHandlerDrain(SHUTDOWN_HANDLER_DRAIN_MS);
+    if (!drained) {
+      logger.warn(
+        `Pre-terminate handler drain timed out after ${SHUTDOWN_HANDLER_DRAIN_MS}ms; proceeding with cleanup anyway`,
+      );
+    }
+
     // Lazy import to avoid the import cycle:
     //   handler-utils -> worker-core -> create-server -> handle-request
     //   -> handler-utils. By the time this runs, all modules are loaded.
