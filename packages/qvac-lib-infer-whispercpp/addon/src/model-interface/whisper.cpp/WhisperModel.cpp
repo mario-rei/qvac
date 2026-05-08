@@ -40,6 +40,19 @@ static bool shouldAbortWhisper(void* userData) {
 
 WhisperModel::WhisperModel(WhisperConfig config) : cfg_(std::move(config)) {}
 
+WhisperModel::ProcessGuard::ProcessGuard(WhisperModel& model) : model_(model) {
+  acquired_ = model_.tryEnterProcess();
+  if (!acquired_) {
+    throw std::runtime_error("Model is unloading");
+  }
+}
+
+WhisperModel::ProcessGuard::~ProcessGuard() {
+  if (acquired_) {
+    model_.leaveProcess();
+  }
+}
+
 WhisperModel::~WhisperModel() noexcept {
   try {
     unload();
@@ -113,7 +126,15 @@ void WhisperModel::unload() {
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "Unloading Whisper model");
-  resetContext();
+  cancelRequested_.store(true, std::memory_order_relaxed);
+  beginUnloadAndWaitForIdle();
+  try {
+    resetContext();
+  } catch (...) {
+    endUnload();
+    throw;
+  }
+  endUnload();
   is_loaded_ = false;
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -275,6 +296,7 @@ void WhisperModel::warmup() {
 }
 
 void WhisperModel::process(const Input& input) {
+  ProcessGuard processGuard(*this);
 
   if (ctx_ == nullptr) {
     load();
@@ -447,6 +469,39 @@ bool WhisperModel::configContextIsChanged(
 }
 
 void WhisperModel::resetContext() { ctx_.reset(); }
+
+bool WhisperModel::tryEnterProcess() {
+  std::unique_lock lock(processStateMtx_);
+  if (unloadInProgress_) {
+    return false;
+  }
+  ++activeProcessCount_;
+  return true;
+}
+
+void WhisperModel::leaveProcess() {
+  std::unique_lock lock(processStateMtx_);
+  if (activeProcessCount_ > 0) {
+    --activeProcessCount_;
+  }
+  if (activeProcessCount_ == 0) {
+    processStateCv_.notify_all();
+  }
+}
+
+void WhisperModel::beginUnloadAndWaitForIdle() {
+  std::unique_lock lock(processStateMtx_);
+  unloadInProgress_ = true;
+  processStateCv_.wait(lock, [this]() { return activeProcessCount_ == 0; });
+}
+
+void WhisperModel::endUnload() {
+  {
+    std::lock_guard lock(processStateMtx_);
+    unloadInProgress_ = false;
+  }
+  processStateCv_.notify_all();
+}
 
 void WhisperModel::setConfig(const WhisperConfig& config) {
   bool contextChanged = configContextIsChanged(cfg_, config);

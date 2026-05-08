@@ -2,9 +2,11 @@
 
 #include <any>
 #include <atomic>
+#include <condition_variable>
 #include <functional>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <streambuf>
 #include <string>
@@ -128,10 +130,26 @@ public:
   saveLoadParams(T&&, Args&&...) {}
 
 private:
+  class ProcessGuard {
+  public:
+    explicit ProcessGuard(WhisperModel& model);
+    ~ProcessGuard();
+    ProcessGuard(const ProcessGuard&) = delete;
+    ProcessGuard& operator=(const ProcessGuard&) = delete;
+
+  private:
+    WhisperModel& model_;
+    bool acquired_{false};
+  };
+
   static constexpr size_t MAX_CONTEXT_TOKENS = 256;
   // Helper to check if context parameters changed
   static bool configContextIsChanged(
       const WhisperConfig& oldCfg, const WhisperConfig& newCfg);
+  bool tryEnterProcess();
+  void leaveProcess();
+  void beginUnloadAndWaitForIdle();
+  void endUnload();
   void resetContext();
 
   WhisperConfig cfg_;
@@ -163,6 +181,10 @@ private:
   double whisperBatchdMs_ = 0.0;
   double whisperPromptMs_ = 0.0;
   mutable std::atomic_bool cancelRequested_{false};
+  mutable std::mutex processStateMtx_;
+  mutable std::condition_variable processStateCv_;
+  uint32_t activeProcessCount_{0};
+  bool unloadInProgress_{false};
 };
 
 } // namespace qvac_lib_inference_addon_whisper

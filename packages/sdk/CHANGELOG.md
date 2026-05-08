@@ -1,11 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### 🐛 Fixed
-
-- **iOS transcribe() hard crash (Mach exception, type 309).** The pre-terminate cleanup hook (`__shutdown__` → `cleanupForTerminate` → `unloadAllModels`) could run while a request handler was still in flight on a worker C++ thread (e.g. `WhisperModel::process` inside `whisper_full`), freeing the native context underneath the inference and killing the iOS host process. `handle-request.ts` now drains any in-flight handler (up to 8 s) before invoking `cleanupForTerminate()`. The drain is implemented in a new pure module `server/rpc/handler-drain.ts` (`trackHandlerStart`, `trackHandlerEnd`, `awaitHandlerDrain`) and `executeHandler` / `executeDuplexHandler` are wrapped to participate. Best-effort: on timeout we warn and proceed so a wedged handler cannot indefinitely block client teardown. The matching native-side fix lives in `@qvac/transcription-whispercpp` (`ProcessGuard` + `unload()` drain).
-
 ## [0.10.1]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.10.1
